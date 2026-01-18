@@ -53,6 +53,7 @@ from lerobot.utils.utils import (
     init_logging,
 )
 
+from torchvision.transforms import v2
 
 def update_policy(
     train_metrics: MetricsTracker,
@@ -394,10 +395,17 @@ def train(cfg: TrainPipelineConfig, accelerator: Accelerator | None = None):
         logging.info(
             f"Start offline training on a fixed dataset, with effective batch size: {effective_batch_size}"
         )
+    
+    # affine_transfomer = v2.RandomAffine(degrees=(-8, 8), translate=(0.1, 0.1), scale=(0.9, 1.1))
+    # perspective_transformer = v2.RandomPerspective(distortion_scale=0.6, p=1.0)
 
     for _ in range(step, cfg.steps):
         start_time = time.perf_counter()
         batch = next(dl_iter)
+        # print("#############################################################")
+        # print("batch['observation.images.top'].shape: ", batch["observation.images.top"].shape)
+        # print("")
+        batch["observation.images.top"] = affine_transfomer(batch["observation.images.top"])
         batch = preprocessor(batch)
         train_tracker.dataloading_s = time.perf_counter() - start_time
 

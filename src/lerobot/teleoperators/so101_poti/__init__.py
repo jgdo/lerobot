@@ -14,18 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
-
-from ..config import TeleoperatorConfig
-
-
-@TeleoperatorConfig.register_subclass("gamepad")
-@dataclass
-class GamepadTeleopConfig(TeleoperatorConfig):
-    use_gripper: bool = True
-
-
-@TeleoperatorConfig.register_subclass("gamepad_ego")
-@dataclass
-class GamepadEgoTeleopConfig(TeleoperatorConfig):
-    deadzone: float = 0.2
+from .config_so101_poti import SO101PotiConfig
+from .so101_poti import SO101Poti

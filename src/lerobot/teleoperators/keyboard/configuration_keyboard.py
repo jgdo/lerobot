@@ -66,3 +66,13 @@ class KeyboardRoverTeleopConfig(TeleoperatorConfig):
     angular_speed_ratio: float = 0.6
     min_linear_speed: float = 0.1
     min_angular_speed: float = 0.05
+
+
+@TeleoperatorConfig.register_subclass("keyboard_ego")
+@dataclass
+class KeyboardEgoTeleopConfig(KeyboardTeleopConfig):
+    """Configuration for keyboard ego teleoperator.
+
+    Used for controlling robot end-effectors with keyboard inputs.
+    """
+    pass

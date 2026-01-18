@@ -19,13 +19,9 @@ from dataclasses import dataclass
 from ..config import TeleoperatorConfig
 
 
-@TeleoperatorConfig.register_subclass("gamepad")
+@TeleoperatorConfig.register_subclass("so101_poti")
 @dataclass
-class GamepadTeleopConfig(TeleoperatorConfig):
-    use_gripper: bool = True
-
-
-@TeleoperatorConfig.register_subclass("gamepad_ego")
-@dataclass
-class GamepadEgoTeleopConfig(TeleoperatorConfig):
-    deadzone: float = 0.2
+class SO101PotiConfig(TeleoperatorConfig):
+    # Port to connect to the arm
+    port: str
+    motor_names: list[str] = None

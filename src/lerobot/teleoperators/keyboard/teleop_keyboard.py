@@ -27,6 +27,7 @@ from lerobot.utils.decorators import check_if_already_connected, check_if_not_co
 from ..teleoperator import Teleoperator
 from ..utils import TeleopEvents
 from .configuration_keyboard import (
+    KeyboardEgoTeleopConfig,
     KeyboardEndEffectorTeleopConfig,
     KeyboardRoverTeleopConfig,
     KeyboardTeleopConfig,
@@ -62,7 +63,7 @@ class KeyboardTeleop(Teleoperator):
         self.robot_type = config.type
 
         self.event_queue = Queue()
-        self.current_pressed = {}
+        self.current_pressed = set()
         self.listener = None
         self.logs = {}
 
@@ -89,34 +90,44 @@ class KeyboardTeleop(Teleoperator):
     @check_if_already_connected
     def connect(self) -> None:
         if PYNPUT_AVAILABLE:
-            logging.info("pynput is available - enabling local keyboard listener.")
+            print("pynput is available - enabling local keyboard listener.")
             self.listener = keyboard.Listener(
                 on_press=self._on_press,
                 on_release=self._on_release,
             )
             self.listener.start()
         else:
-            logging.info("pynput not available - skipping local keyboard listener.")
+            print("pynput not available - skipping local keyboard listener.")
             self.listener = None
 
     def calibrate(self) -> None:
         pass
 
     def _on_press(self, key):
-        if hasattr(key, "char"):
-            self.event_queue.put((key.char, True))
+        # if hasattr(key, "char"):
+        self.event_queue.put((key, True))
+    
 
     def _on_release(self, key):
-        if hasattr(key, "char"):
-            self.event_queue.put((key.char, False))
+        #if hasattr(key, "char"):
+        self.event_queue.put((key, False))
         if key == keyboard.Key.esc:
             logging.info("ESC pressed, disconnecting.")
             self.disconnect()
 
-    def _drain_pressed_keys(self):
+    def _drain_pressed_keys(self) -> set:
         while not self.event_queue.empty():
-            key_char, is_pressed = self.event_queue.get_nowait()
-            self.current_pressed[key_char] = is_pressed
+            key, is_pressed = self.event_queue.get_nowait()
+
+            if hasattr(key, "char") and key.char is not None:
+                set_key = key.char.lower()
+            else:
+                set_key = key
+            
+            if is_pressed:
+                self.current_pressed.add(set_key)
+            elif set_key in self.current_pressed:
+                self.current_pressed.remove(set_key)
 
     def configure(self):
         pass
@@ -155,6 +166,7 @@ class KeyboardEndEffectorTeleop(KeyboardTeleop):
         super().__init__(config)
         self.config = config
         self.misc_keys_queue = Queue()
+        self.step_size = 0.01
 
     @property
     def action_features(self) -> dict:
@@ -178,6 +190,8 @@ class KeyboardEndEffectorTeleop(KeyboardTeleop):
         delta_y = 0.0
         delta_z = 0.0
         gripper_action = 1.0
+
+
 
         # Generate action based on current key states
         for key, val in self.current_pressed.items():
@@ -204,16 +218,20 @@ class KeyboardEndEffectorTeleop(KeyboardTeleop):
                 # this is useful for retrieving other events like interventions for RL, episode success, etc.
                 self.misc_keys_queue.put(key)
 
-        self.current_pressed.clear()
+        # self.current_pressed.clear()
+
+        #print(self.current_pressed)
 
         action_dict = {
-            "delta_x": delta_x,
-            "delta_y": delta_y,
-            "delta_z": delta_z,
+            "delta_x": delta_x * self.step_size,
+            "delta_y": delta_y * self.step_size,
+            "delta_z": delta_z * self.step_size,
         }
 
         if self.config.use_gripper:
             action_dict["gripper"] = gripper_action
+
+        # print(action_dict)
 
         return action_dict
 
@@ -430,3 +448,182 @@ class KeyboardRoverTeleop(KeyboardTeleop):
             "linear.vel": linear_velocity,
             "angular.vel": angular_velocity,
         }
+
+
+class KeyboardEgoTeleop(KeyboardTeleop):
+    """
+    Teleop class to use keyboard inputs for end effector control.
+    Designed to be used with the `So100FollowerEndEffector` robot.
+    """
+
+    config_class = KeyboardEgoTeleopConfig
+    name = "keyboard_ego"
+
+    def __init__(self, config: KeyboardEgoTeleopConfig):
+        super().__init__(config)
+        self.config = config
+        self.misc_keys_queue = Queue()
+        self.pos_step_size = 0.001
+        self.rot_step_size = 0.005
+
+    @property
+    def action_features(self) -> dict:
+        return {
+            "dtype": "float32",
+            "shape": (7,),
+            "names": {"enabled": 0, 
+                      "delta_gripper": 1, 
+                      "delta_forward": 2, 
+                      "delta_rot_base": 3,
+                      "delta_tilt_front": 4,
+                      "delta_gripper_twist": 5,
+                      "delta_up": 6,
+                      },
+        }
+
+    def get_action(self) -> dict[str, Any]:
+        if not self.is_connected:
+            raise DeviceNotConnectedError(
+                "KeyboardTeleop is not connected. You need to run `connect()` before `get_action()`."
+            )
+
+        self._drain_pressed_keys()
+        delta_forward = 0.0
+        delta_rot_base = 0.0
+        delta_tilt_front = 0.0
+        delta_gripper = 0.0
+        delta_gripper_twist = 0.0
+        delta_up = 0.0
+        enabled = len(self.current_pressed) > 0
+
+
+        # Generate action based on current key states
+        for key in self.current_pressed:
+            # print("Pressed key: ", key)
+        
+            if key == 'w':
+                if keyboard.Key.shift_l in self.current_pressed:
+                    delta_up = -1
+                else:
+                    delta_forward = 1
+            elif key == 's':
+                if keyboard.Key.shift_l in self.current_pressed:
+                    delta_up = 1
+                else:
+                    delta_forward = -1
+            elif key == keyboard.Key.left:
+                delta_rot_base = 1
+            elif key == keyboard.Key.right:
+                delta_rot_base = -1
+            elif key == keyboard.Key.up:
+                delta_tilt_front = 1
+            elif key == keyboard.Key.down:
+                delta_tilt_front = -1
+            elif key == 'a':
+                delta_gripper_twist = -1
+            elif key == 'd':
+                delta_gripper_twist = 1
+            elif key == 'q':
+                delta_gripper = 1
+            elif key == 'e':
+                delta_gripper = -1
+        #     elif key == keyboard.Key.shift:
+        #         delta_z = -int(val)
+        #     elif key == keyboard.Key.shift_r:
+        #         delta_z = int(val)
+        #     elif key == keyboard.Key.ctrl_r:
+        #         # Gripper actions are expected to be between 0 (close), 1 (stay), 2 (open)
+        #         gripper_action = int(val) + 1
+        #     elif key == keyboard.Key.ctrl_l:
+        #         gripper_action = int(val) - 1
+            else:
+                # If the key is pressed, add it to the misc_keys_queue
+                # this will record key presses that are not part of the delta_x, delta_y, delta_z
+                # this is useful for retrieving other events like interventions for RL, episode success, etc.
+                self.misc_keys_queue.put(key)
+
+        # self.current_pressed.clear()
+
+
+        # print(self.current_pressed)
+
+        action_dict = {
+            "delta_forward": delta_forward * self.pos_step_size,
+            "delta_rot_base": delta_rot_base * self.pos_step_size,
+            "delta_tilt_front": delta_tilt_front * self.rot_step_size,
+            "delta_gripper_twist": delta_gripper_twist * self.rot_step_size,
+            "delta_gripper": delta_gripper,
+            "delta_up": delta_up * self.pos_step_size,
+            "enabled": enabled,
+        }
+
+        # if self.config.use_gripper:
+        #     action_dict["gripper"] = gripper_action
+
+        # print(action_dict)
+
+        return action_dict
+
+    def get_teleop_events(self) -> dict[str, Any]:
+        """
+        Get extra control events from the keyboard such as intervention status,
+        episode termination, success indicators, etc.
+
+        Keyboard mappings:
+        - Any movement keys pressed = intervention active
+        - 's' key = success (terminate episode successfully)
+        - 'r' key = rerecord episode (terminate and rerecord)
+        - 'q' key = quit episode (terminate without success)
+
+        Returns:
+            Dictionary containing:
+                - is_intervention: bool - Whether human is currently intervening
+                - terminate_episode: bool - Whether to terminate the current episode
+                - success: bool - Whether the episode was successful
+                - rerecord_episode: bool - Whether to rerecord the episode
+        """
+        if not self.is_connected:
+            return {
+                TeleopEvents.IS_INTERVENTION: False,
+                TeleopEvents.TERMINATE_EPISODE: False,
+                TeleopEvents.SUCCESS: False,
+                TeleopEvents.RERECORD_EPISODE: False,
+            }
+
+        # Check if any movement keys are currently pressed (indicates intervention)
+        movement_keys = [
+            keyboard.Key.up,
+            keyboard.Key.down,
+            keyboard.Key.left,
+            keyboard.Key.right,
+            keyboard.Key.shift,
+            keyboard.Key.shift_r,
+            keyboard.Key.ctrl_r,
+            keyboard.Key.ctrl_l,
+        ]
+        is_intervention = any(key in self.current_pressed for key in movement_keys)
+
+        # Check for episode control commands from misc_keys_queue
+        terminate_episode = False
+        success = False
+        rerecord_episode = False
+
+        # Process any pending misc keys
+        while not self.misc_keys_queue.empty():
+            key = self.misc_keys_queue.get_nowait()
+            if key == "s":
+                success = True
+            elif key == "r":
+                terminate_episode = True
+                rerecord_episode = True
+            elif key == "q":
+                terminate_episode = True
+                success = False
+
+        return {
+            TeleopEvents.IS_INTERVENTION: is_intervention,
+            TeleopEvents.TERMINATE_EPISODE: terminate_episode,
+            TeleopEvents.SUCCESS: success,
+            TeleopEvents.RERECORD_EPISODE: rerecord_episode,
+        }
+    

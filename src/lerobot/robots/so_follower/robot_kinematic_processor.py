@@ -82,6 +82,7 @@ class EEReferenceAndDelta(RobotActionProcessorStep):
         if self.use_ik_solution and "IK_solution" in self.transition.get(TransitionKey.COMPLEMENTARY_DATA):
             q_raw = self.transition.get(TransitionKey.COMPLEMENTARY_DATA)["IK_solution"]
         else:
+            print(observation)
             q_raw = np.array(
                 [
                     float(v)
@@ -295,6 +296,8 @@ class InverseKinematicsEEToJoints(RobotActionProcessorStep):
         )
         if q_raw is None:
             raise ValueError("Joints observation is require for computing robot kinematics")
+        
+        print("q_raw: ", q_raw)
 
         if self.initial_guess_current_joints:  # Use current joints as initial guess
             self.q_curr = q_raw
