@@ -16,6 +16,8 @@
 from collections.abc import Callable
 from typing import Any
 
+from accelerate import Accelerator
+
 from lerobot.utils.utils import format_big_number
 
 
@@ -95,7 +97,7 @@ class MetricsTracker:
         num_episodes: int,
         metrics: dict[str, AverageMeter],
         initial_step: int = 0,
-        accelerator: Callable | None = None,
+        accelerator: Accelerator | None = None,
     ):
         self.__dict__.update(dict.fromkeys(self.__keys__))
         self._batch_size = batch_size

@@ -32,9 +32,9 @@ from lerobot.utils.utils import format_big_number, init_logging
 
 from torchvision.transforms import v2
 
-BASE_REPO_ID = "jgdo/pick_and_place_3seq"
-TRAIN_REPO_ID = BASE_REPO_ID + "_train"
-VAL_REPO_ID = BASE_REPO_ID + "_val"
+BASE_REPO_ID = "pick_and_place_3seq"
+TRAIN_REPO_ID = "jgdo/" + BASE_REPO_ID + "_train"
+VAL_REPO_ID = "jgdo/" + "pick_and_place_3seq_val" # BASE_REPO_ID + "_val"
 
 
 # dataset = LeRobotDataset("jgdo/pick_and_place_3seq_train")
@@ -50,6 +50,8 @@ dataset_config = DatasetConfig(
 policy_config = ACTConfig(
     device="cuda",
     push_to_hub=False,
+    chunk_size=15,
+    n_action_steps=15,
 )
 
 now = datetime.now()
@@ -59,14 +61,14 @@ cfg = TrainPipelineConfig(
     dataset=dataset_config,
     policy=policy_config,
     output_dir=Path(f"outputs/act/{BASE_REPO_ID}_{now_str}"),
-    job_name="train_act_py_no_affine_on_wrist",
+    job_name="act_affine_chunk_size_15",
     wandb=WandBConfig(enable=True),
-    batch_size=32,
+    batch_size=40,
     num_workers=8,
-    steps=25000,
+    steps=5000,
     eval_freq=1000,
-    save_freq=5000,
-    log_freq=200,
+    save_freq=1000,
+    log_freq=100,
 )
 
 def load_dataset(repo_id: str) -> LeRobotDataset:
@@ -103,8 +105,6 @@ torch.backends.cuda.matmul.allow_tf32 = True
 
 logging.info("Creating dataset")
 train_dataset = make_dataset(cfg)
-
-
 
 
 val_cfg = TrainPipelineConfig(
@@ -148,9 +148,6 @@ logging.info("Creating optimizer and scheduler")
 optimizer, lr_scheduler = make_optimizer_and_scheduler(cfg, policy)
 
 step = 0  # number of policy updates (forward + backward + optim)
-num_learnable_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
-num_total_params = sum(p.numel() for p in policy.parameters())
-
 num_learnable_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
 num_total_params = sum(p.numel() for p in policy.parameters())
 
@@ -246,12 +243,12 @@ logging.info(
     f"Start offline training on a fixed dataset, with effective batch size: {effective_batch_size}"
 )
 
-# affine_transformer = v2.RandomAffine(degrees=(-8, 8), translate=(0.1, 0.1), scale=(0.9, 1.1))
+affine_transformer = v2.RandomAffine(degrees=(-8, 8), translate=(0.1, 0.1), scale=(0.9, 1.1))
 
 for _ in range(step, cfg.steps):
     start_time = time.perf_counter()
     batch = next(dl_iter)
-    # batch["observation.images.top"] = affine_transformer(batch["observation.images.top"])
+    batch["observation.images.top"] = affine_transformer(batch["observation.images.top"])
     batch = preprocessor(batch)
     train_tracker.dataloading_s = time.perf_counter() - start_time
 

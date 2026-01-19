@@ -1,38 +1,19 @@
 
-from pathlib import Path
-from pprint import pformat
 import logging
 
-from termcolor import colored
 import torch
 from tqdm import tqdm
-from lerobot.configs.default import DatasetConfig, WandBConfig
 from lerobot.configs.policies import PreTrainedConfig
-from lerobot.configs.train import TrainPipelineConfig
-from lerobot.datasets.factory import make_dataset, resolve_delta_timestamps
+from lerobot.datasets.factory import resolve_delta_timestamps
 from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
-from lerobot.datasets.sampler import EpisodeAwareSampler
-from lerobot.datasets.utils import cycle
-from lerobot.optim.factory import make_optimizer_and_scheduler
-from lerobot.optim.factory import make_optimizer_and_scheduler
 from lerobot.policies.act.modeling_act import ACTPolicy
-from lerobot.policies.factory import make_policy, make_pre_post_processors
-from lerobot.rl.wandb_utils import WandBLogger
-from lerobot.scripts.lerobot_eval import eval_policy_all
-from lerobot.scripts.lerobot_train import train, update_policy
-from lerobot.policies import ACTConfig
-from datetime import datetime
-from accelerate.utils import DistributedDataParallelKwargs
-from accelerate import Accelerator
-import time
+from lerobot.policies.factory import make_pre_post_processors
 
-from lerobot.utils.logging_utils import AverageMeter, MetricsTracker
-from lerobot.utils.train_utils import get_step_checkpoint_dir, get_step_identifier, save_checkpoint, update_last_checkpoint
-from lerobot.utils.utils import format_big_number, init_logging
+from lerobot.utils.utils import init_logging
 
 
 REPO_ID = "jgdo/pick_and_place_3seq_val"
-MODEL = "outputs/train/act_pick_place_all_train"
+MODEL = "outputs/act/jgdo/pick_and_place_3seq_2026-01-17_18:38:19"
 CHECKPOINT = "last"
 MODEL_ID = f"{MODEL}/checkpoints/{CHECKPOINT}/pretrained_model"
 
